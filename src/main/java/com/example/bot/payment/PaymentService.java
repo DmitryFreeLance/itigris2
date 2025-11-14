@@ -27,18 +27,20 @@ public class PaymentService {
         this.bot = bot;
     }
 
-    public void sendInvoice(long chatId) {
+    // Годовая подписка 2 900 ₽
+    public void sendYearInvoice(long chatId) {
         List<LabeledPrice> prices = new ArrayList<>();
-        prices.add(new LabeledPrice("Месяц подписки", env.priceRubKopeks()));
+        prices.add(new LabeledPrice("Годовая подписка", env.priceYearRubKopeks()));
+
         SendInvoice inv = SendInvoice.builder()
                 .chatId(Long.toString(chatId))
-                .title("💳 Подписка на 1 месяц")
-                .description("🔓 Доступ к эксклюзивному контенту на 30 дней")
-                .payload("subscribe_month_1")
+                .title("💳 Подписка на 1 год")
+                .description("Подписка на вечные очки: первый платёж 2 900 ₽ за год, далее 200 ₽ в месяц до конца срока.")
+                .payload("subscribe_year_1")
                 .providerToken(env.providerToken())
                 .currency("RUB")
                 .prices(prices)
-                .startParameter("subscribe")
+                .startParameter("subscribe_year")
                 .needEmail(false)
                 .needName(false)
                 .isFlexible(false)
@@ -46,9 +48,53 @@ public class PaymentService {
         try {
             bot.execute(inv);
         } catch (TelegramApiException e) {
-            log.error("sendInvoice failed", e);
+            log.error("sendYearInvoice failed", e);
             try {
-                bot.execute(SendMessage.builder().chatId(Long.toString(chatId)).text("⚠️ Произошла ошибка при создании счёта.\nПопробуйте ещё раз чуть позже.")
+                bot.execute(SendMessage.builder()
+                        .chatId(Long.toString(chatId))
+                        .text("⚠️ Ошибка при создании счёта на годовую подписку. Попробуйте позже.")
+                        .build());
+            } catch (TelegramApiException ignored) {}
+        }
+    }
+
+    // Месячная оплата 200 ₽ (доступна только при активной годовой)
+    public void sendMonthInvoice(long chatId) {
+        if (!db.isSubscriptionActive(chatId)) {
+            try {
+                bot.execute(SendMessage.builder()
+                        .chatId(Long.toString(chatId))
+                        .text("⚠️ Месячная оплата 200 ₽ доступна только при активной годовой подписке за 2 900 ₽.\n" +
+                                "Сначала оформите годовую подписку.")
+                        .build());
+            } catch (TelegramApiException ignored) {}
+            return;
+        }
+
+        List<LabeledPrice> prices = new ArrayList<>();
+        prices.add(new LabeledPrice("Месячная оплата", env.priceMonthRubKopeks()));
+
+        SendInvoice inv = SendInvoice.builder()
+                .chatId(Long.toString(chatId))
+                .title("💳 Месячная оплата 200 ₽")
+                .description("Оплата месяца обслуживания в рамках вашей годовой подписки на вечные очки.")
+                .payload("subscribe_month_1")
+                .providerToken(env.providerToken())
+                .currency("RUB")
+                .prices(prices)
+                .startParameter("subscribe_month")
+                .needEmail(false)
+                .needName(false)
+                .isFlexible(false)
+                .build();
+        try {
+            bot.execute(inv);
+        } catch (TelegramApiException e) {
+            log.error("sendMonthInvoice failed", e);
+            try {
+                bot.execute(SendMessage.builder()
+                        .chatId(Long.toString(chatId))
+                        .text("⚠️ Ошибка при создании счёта на месяц. Попробуйте позже.")
                         .build());
             } catch (TelegramApiException ignored) {}
         }
@@ -60,6 +106,8 @@ public class PaymentService {
                 .ok(ok)
                 .errorMessage(error)
                 .build();
-        try { bot.execute(ans); } catch (TelegramApiException ignored) {}
+        try {
+            bot.execute(ans);
+        } catch (TelegramApiException ignored) {}
     }
 }
