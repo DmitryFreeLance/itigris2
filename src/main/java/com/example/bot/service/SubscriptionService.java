@@ -19,6 +19,11 @@ import java.util.concurrent.TimeUnit;
 public class SubscriptionService {
     private static final Logger log = LoggerFactory.getLogger(SubscriptionService.class);
 
+    private static final String R_MONTH_MINUS_3 = "MONTH_MINUS_3";
+    private static final String R_MONTH_TODAY  = "MONTH_TODAY";
+    private static final String R_YEAR_MINUS_3 = "YEAR_MINUS_3";
+    private static final String R_YEAR_TODAY   = "YEAR_TODAY";
+
     private final Env env;
     private final Database db;
     private final TelegramBot bot;
@@ -31,6 +36,7 @@ public class SubscriptionService {
     }
 
     public void startSchedulers() {
+        // Раз в час ок, т.к. напоминания теперь идемпотентные.
         scheduler.scheduleAtFixedRate(this::runRemindersSafe, 5, 60, TimeUnit.MINUTES);
     }
 
@@ -43,66 +49,66 @@ public class SubscriptionService {
     }
 
     private void runReminders() {
-        // 1) МЕСЯЧНАЯ ПОДПИСКА (внутри годовой)
+        LocalDate today = LocalDate.now();
 
-        // за 3 дня до конца месяца
+        // 1) МЕСЯЧНАЯ ПОДПИСКА (внутри годовой)
+        // за 3 дня до конца месяца — строго один раз в сутки
         List<Long> monthIn3days = db.findMonthSubsEndingInDays(3);
         for (Long chatId : monthIn3days) {
-            SendMessage m = SendMessage.builder()
-                    .chatId(chatId.toString())
-                    .text("⏰ Через 3 дня заканчивается оплаченный месяц вашей подписки.\n" +
-                            "Чтобы сохранить обслуживание за 200 ₽ в месяц, оплатите следующий месяц.")
-                    .replyMarkup(Keyboards.buyMonthButton())
-                    .build();
-            try {
-                bot.execute(m);
-            } catch (TelegramApiException ignored) {}
+            if (db.markReminderOnce(chatId, R_MONTH_MINUS_3, today)) {
+                SendMessage m = SendMessage.builder()
+                        .chatId(chatId.toString())
+                        .text("⏰ Через 3 дня заканчивается оплаченный месяц вашей подписки.\n" +
+                                "Чтобы сохранить обслуживание за 200 ₽ в месяц, оплатите следующий месяц.")
+                        .replyMarkup(Keyboards.buyMonthButton())
+                        .build();
+                try { bot.execute(m); } catch (TelegramApiException ignored) {}
+            }
         }
 
-        // в день окончания месяца
+        // в день окончания месяца — строго один раз в сутки
         List<Long> monthToday = db.findMonthSubsEndingToday();
         for (Long chatId : monthToday) {
-            db.setMonthly(chatId, false, LocalDate.now());
-            SendMessage m = SendMessage.builder()
-                    .chatId(chatId.toString())
-                    .text("⚠️ Срок вашей месячной оплаты истёк.\n" +
-                            "Оплатите 200 ₽, чтобы продолжить обслуживание в рамках годовой подписки.")
-                    .replyMarkup(Keyboards.buyMonthButton())
-                    .build();
-            try {
-                bot.execute(m);
-            } catch (TelegramApiException ignored) {}
+            if (db.markReminderOnce(chatId, R_MONTH_TODAY, today)) {
+                db.setMonthly(chatId, false, today);
+                SendMessage m = SendMessage.builder()
+                        .chatId(chatId.toString())
+                        .text("⚠️ Срок вашей месячной оплаты истёк.\n" +
+                                "Оплатите 200 ₽, чтобы продолжить обслуживание в рамках годовой подписки.")
+                        .replyMarkup(Keyboards.buyMonthButton())
+                        .build();
+                try { bot.execute(m); } catch (TelegramApiException ignored) {}
+            }
         }
 
         // 2) ГОДОВАЯ ПОДПИСКА
-
-        // за 3 дня до конца года
+        // за 3 дня до конца года — строго один раз в сутки
         List<Long> yearIn3days = db.findYearSubsEndingInDays(3);
         for (Long chatId : yearIn3days) {
-            SendMessage m = SendMessage.builder()
-                    .chatId(chatId.toString())
-                    .text("⏰ Через 3 дня заканчивается ваша годовая подписка на вечные очки.\n" +
-                            "Продлите её, чтобы сохранить все преимущества.")
-                    .replyMarkup(Keyboards.buyYearButton())
-                    .build();
-            try {
-                bot.execute(m);
-            } catch (TelegramApiException ignored) {}
+            if (db.markReminderOnce(chatId, R_YEAR_MINUS_3, today)) {
+                SendMessage m = SendMessage.builder()
+                        .chatId(chatId.toString())
+                        .text("⏰ Через 3 дня заканчивается ваша годовая подписка на вечные очки.\n" +
+                                "Продлите её, чтобы сохранить все преимущества.")
+                        .replyMarkup(Keyboards.buyYearButton())
+                        .build();
+                try { bot.execute(m); } catch (TelegramApiException ignored) {}
+            }
         }
 
-        // в день окончания годовой
+        // в день окончания годовой — строго один раз в сутки
         List<Long> yearToday = db.findYearSubsEndingToday();
         for (Long chatId : yearToday) {
-            db.cancelSubscriptionHard(chatId);
-            SendMessage m = SendMessage.builder()
-                    .chatId(chatId.toString())
-                    .text("⚠️ Ваша годовая подписка закончилась.\n" +
-                            "Чтобы продолжить пользоваться сервисом, оформите новый год за 2 900 ₽.")
-                    .replyMarkup(Keyboards.buyYearButton())
-                    .build();
-            try {
-                bot.execute(m);
-            } catch (TelegramApiException ignored) {}
+            if (db.markReminderOnce(chatId, R_YEAR_TODAY, today)) {
+                db.cancelSubscriptionHard(chatId);
+                SendMessage m = SendMessage.builder()
+                        .chatId(chatId.toString())
+                        .text("⚠️ Ваша годовая подписка закончилась.\n" +
+                                "Чтобы продолжить пользоваться сервисом, оформите новый год за 2 900 ₽.")
+                        .replyMarkup(Keyboards.buyYearButton())
+                        .build();
+                try { bot.execute(m); } catch (TelegramApiException ignored) {}
+            }
         }
     }
 

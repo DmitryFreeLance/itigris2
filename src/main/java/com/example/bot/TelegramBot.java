@@ -7,6 +7,7 @@ import com.example.bot.service.SubscriptionService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.*;
@@ -16,6 +17,10 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.Set;
 
 public class TelegramBot extends TelegramLongPollingBot {
     private static final Logger log = LoggerFactory.getLogger(TelegramBot.class);
@@ -26,6 +31,11 @@ public class TelegramBot extends TelegramLongPollingBot {
     private SubscriptionService subscriptionService;
     private BroadcastService broadcastService;
     private PaymentService paymentService;
+
+    // --- простая защита от повторной доставки одного и того же update ---
+    private final Deque<Integer> recentUpdateIds = new ArrayDeque<>();
+    private final Set<Integer> recentUpdateSet = new HashSet<>();
+    private static final int UPDATE_ID_CACHE = 2048;
 
     public TelegramBot(Env env, Database db) {
         super(env.botToken());
@@ -59,9 +69,26 @@ public class TelegramBot extends TelegramLongPollingBot {
                 isAdmin(chatId));
     }
 
+    private boolean isDuplicate(Update u) {
+        int id = u.getUpdateId();
+        synchronized (recentUpdateSet) {
+            if (recentUpdateSet.contains(id)) return true;
+            recentUpdateSet.add(id);
+            recentUpdateIds.addLast(id);
+            if (recentUpdateIds.size() > UPDATE_ID_CACHE) {
+                Integer old = recentUpdateIds.removeFirst();
+                recentUpdateSet.remove(old);
+            }
+        }
+        return false;
+    }
+
     @Override
     public void onUpdateReceived(Update update) {
         try {
+            // защита от случайных дублей
+            if (isDuplicate(update)) return;
+
             if (update.hasMessage()) {
                 Message msg = update.getMessage();
                 long chatId = msg.getChatId();
@@ -90,7 +117,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                         sendAdminPanel(chatId);
                         return;
                     }
-                    if (text.equals("/subs") && isAdmin(chatId)) {
+                    if ((text.equals("/subs") || text.equals("/sub")) && isAdmin(chatId)) {
                         handleSubs(chatId);
                         return;
                     }
@@ -137,6 +164,14 @@ public class TelegramBot extends TelegramLongPollingBot {
                 String data = cq.getData();
                 long chatId = cq.getMessage().getChatId();
                 ensureUserSaved(cq.getFrom(), chatId);
+
+                // ACK для inline-кнопки, чтобы не было повторных нажатий из-за "крутилки"
+                try {
+                    execute(AnswerCallbackQuery.builder()
+                            .callbackQueryId(cq.getId())
+                            .cacheTime(2)
+                            .build());
+                } catch (TelegramApiException ignored) {}
 
                 switch (data) {
                     case "MY_SUBSCRIPTION":
@@ -206,6 +241,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private void sendAdminPanel(long chatId) throws TelegramApiException {
         String txt = "🛠 Админ-панель\n\n" +
                 "• /subs — 👥 показать активные годовые подписки и статус месяца\n" +
+                "• /sub  — то же самое, сокращение\n" +
                 "• /send — 📣 сделать рассылку (сначала медиа/файлы, затем текст)";
         execute(SendMessage.builder()
                 .chatId(Long.toString(chatId))
@@ -215,9 +251,16 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void handleSubs(long chatId) throws TelegramApiException {
         var lines = db.listActiveSubscribersTagAndDate();
-        String body = lines.isEmpty()
-                ? "🕊 Сейчас нет ни одной активной годовой подписки."
-                : String.join("\n", lines);
+        String body;
+        if (lines.isEmpty()) {
+            body = "🕊 Сейчас нет ни одной активной годовой подписки.";
+        } else {
+            StringBuilder sb = new StringBuilder("👥 Активные подписки:\n\n");
+            for (int i = 0; i < lines.size(); i++) {
+                sb.append(i + 1).append(") ").append(lines.get(i)).append("\n\n");
+            }
+            body = sb.toString().trim();
+        }
         execute(SendMessage.builder()
                 .chatId(Long.toString(chatId))
                 .text(body)

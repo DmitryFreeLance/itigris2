@@ -38,12 +38,16 @@ public class Database {
             st.execute("CREATE INDEX IF NOT EXISTS idx_users_sub_end ON users(subscription_end);");
 
             // Миграция старой схемы (если таблица уже была)
-            try {
-                st.execute("ALTER TABLE users ADD COLUMN monthly_end TEXT;");
-            } catch (SQLException ignored) {}
-            try {
-                st.execute("ALTER TABLE users ADD COLUMN monthly_active INTEGER DEFAULT 0;");
-            } catch (SQLException ignored) {}
+            try { st.execute("ALTER TABLE users ADD COLUMN monthly_end TEXT;"); } catch (SQLException ignored) {}
+            try { st.execute("ALTER TABLE users ADD COLUMN monthly_active INTEGER DEFAULT 0;"); } catch (SQLException ignored) {}
+
+            // Таблица для дедупликации напоминаний
+            st.execute("CREATE TABLE IF NOT EXISTS reminders (" +
+                    "chat_id INTEGER NOT NULL," +
+                    "type TEXT NOT NULL," +        // MONTH_MINUS_3, MONTH_TODAY, YEAR_MINUS_3, YEAR_TODAY
+                    "date TEXT NOT NULL," +        // YYYY-MM-DD (день отправки напоминания)
+                    "PRIMARY KEY(chat_id, type, date)" +
+                    ");");
 
             log.info("SQLite schema ensured.");
         } catch (SQLException e) {
@@ -220,6 +224,7 @@ public class Database {
                 String username = rs.getString(1);
                 if (username == null || username.isBlank()) username = "(без username)";
                 String tag = rs.getString(2);
+                if (tag == null || tag.isBlank()) tag = "basic";
                 String yearEnd = rs.getString(3);
                 String monthEnd = rs.getString(4);
                 int monthActive = rs.getInt(5);
@@ -229,15 +234,15 @@ public class Database {
 
                 String monthStatus;
                 if (monthActive == 1 && monthEnd != null) {
-                    monthStatus = "месяц оплачен до: " +
+                    monthStatus = "месячная до: " +
                             com.example.bot.DateUtils.formatRu(LocalDate.parse(monthEnd));
                 } else {
                     monthStatus = "месячная не оплачена";
                 }
 
-                lines.add("@" + username + " (" + tag +
-                        " | год до: " + yearPretty +
-                        " | " + monthStatus + ")");
+                lines.add("@" + username + " (" + tag + ")\n" +
+                        "годовая до: " + yearPretty + "\n" +
+                        monthStatus);
             }
         } catch (SQLException e) {
             throw new RuntimeException(e);
@@ -311,5 +316,23 @@ public class Database {
             throw new RuntimeException(e);
         }
         return ids;
+    }
+
+    /**
+     * Отметить напоминание как отправленное ОДИН РАЗ в конкретный день.
+     * @return true, если запись вставлена впервые (т.е. сегодня ещё не отправляли этот тип).
+     */
+    public boolean markReminderOnce(long chatId, String type, LocalDate date) {
+        String sql = "INSERT OR IGNORE INTO reminders(chat_id, type, date) VALUES (?,?,?)";
+        try (Connection conn = DriverManager.getConnection(url);
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, chatId);
+            ps.setString(2, type);
+            ps.setString(3, date.toString());
+            int inserted = ps.executeUpdate();
+            return inserted == 1;
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
