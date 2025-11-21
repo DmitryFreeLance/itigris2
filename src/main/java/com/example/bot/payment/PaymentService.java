@@ -35,7 +35,7 @@ public class PaymentService {
         SendInvoice inv = SendInvoice.builder()
                 .chatId(Long.toString(chatId))
                 .title("💳 Подписка на 1 год")
-                .description("Подписка на вечные очки: первый платёж 2 900 ₽ за год, далее 200 ₽ в месяц до конца срока.")
+                .description("Подписка на вечные очки: первый платёж 3900 ₽ за год, далее 390 ₽ в месяц до конца срока.")
                 .payload("subscribe_year_1")
                 .providerToken(env.providerToken())
                 .currency("RUB")
@@ -58,13 +58,12 @@ public class PaymentService {
         }
     }
 
-    // Месячная оплата 200 ₽ (доступна только при активной годовой)
     public void sendMonthInvoice(long chatId) {
         if (!db.isSubscriptionActive(chatId)) {
             try {
                 bot.execute(SendMessage.builder()
                         .chatId(Long.toString(chatId))
-                        .text("⚠️ Месячная оплата 200 ₽ доступна только при активной годовой подписке за 2 900 ₽.\n" +
+                        .text("⚠️ Месячная оплата 390 ₽ доступна только при активной годовой подписке за 3900 ₽.\n" +
                                 "Сначала оформите годовую подписку.")
                         .build());
             } catch (TelegramApiException ignored) {}
@@ -76,7 +75,7 @@ public class PaymentService {
 
         SendInvoice inv = SendInvoice.builder()
                 .chatId(Long.toString(chatId))
-                .title("💳 Месячная оплата 200 ₽")
+                .title("💳 Месячная оплата 390 ₽")
                 .description("Оплата месяца обслуживания в рамках вашей годовой подписки на вечные очки.")
                 .payload("subscribe_month_1")
                 .providerToken(env.providerToken())

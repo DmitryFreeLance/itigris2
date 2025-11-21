@@ -75,7 +75,7 @@ public class Keyboards {
 
     public static InlineKeyboardMarkup buyMonthButton() {
         InlineKeyboardButton buy = InlineKeyboardButton.builder()
-                .text("💳 Оплатить месяц 200 ₽")
+                .text("💳 Оплатить месяц 390 ₽")
                 .callbackData("BUY_MONTH_SUBSCRIPTION")
                 .build();
 

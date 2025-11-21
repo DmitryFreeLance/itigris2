@@ -59,7 +59,7 @@ public class SubscriptionService {
                 SendMessage m = SendMessage.builder()
                         .chatId(chatId.toString())
                         .text("⏰ Через 3 дня заканчивается оплаченный месяц вашей подписки.\n" +
-                                "Чтобы сохранить обслуживание за 200 ₽ в месяц, оплатите следующий месяц.")
+                                "Чтобы сохранить обслуживание за 390 ₽ в месяц, оплатите следующий месяц.")
                         .replyMarkup(Keyboards.buyMonthButton())
                         .build();
                 try { bot.execute(m); } catch (TelegramApiException ignored) {}
@@ -74,7 +74,7 @@ public class SubscriptionService {
                 SendMessage m = SendMessage.builder()
                         .chatId(chatId.toString())
                         .text("⚠️ Срок вашей месячной оплаты истёк.\n" +
-                                "Оплатите 200 ₽, чтобы продолжить обслуживание в рамках годовой подписки.")
+                                "Оплатите 390 ₽, чтобы продолжить обслуживание в рамках годовой подписки.")
                         .replyMarkup(Keyboards.buyMonthButton())
                         .build();
                 try { bot.execute(m); } catch (TelegramApiException ignored) {}
@@ -104,7 +104,7 @@ public class SubscriptionService {
                 SendMessage m = SendMessage.builder()
                         .chatId(chatId.toString())
                         .text("⚠️ Ваша годовая подписка закончилась.\n" +
-                                "Чтобы продолжить пользоваться сервисом, оформите новый год за 2 900 ₽.")
+                                "Чтобы продолжить пользоваться сервисом, оформите новый год за 3900 ₽.")
                         .replyMarkup(Keyboards.buyYearButton())
                         .build();
                 try { bot.execute(m); } catch (TelegramApiException ignored) {}
@@ -135,10 +135,10 @@ public class SubscriptionService {
                         .append(DateUtils.formatRu(monthEnd));
             } else {
                 sb.append("\n⚠️ Месячная оплата сейчас не активна.\n")
-                        .append("Оплатите 200 ₽, чтобы пользоваться обслуживанием в рамках года.");
+                        .append("Оплатите 390 ₽, чтобы пользоваться обслуживанием в рамках года.");
             }
         } else {
-            sb.append("\nДля использования сервиса сначала оформите годовую подписку за 2 900 ₽.");
+            sb.append("\nДля использования сервиса сначала оформите годовую подписку за 3900 ₽.");
         }
 
         try {
@@ -176,7 +176,7 @@ public class SubscriptionService {
         LocalDate yearEnd = db.getSubscriptionEnd(chatId);
 
         if (yearEnd == null || yearEnd.isBefore(now)) {
-            send(chatId, "⚠️ Сначала нужно оформить годовую подписку за 2 900 ₽.");
+            send(chatId, "⚠️ Сначала нужно оформить годовую подписку за 3900 ₽.");
             return;
         }
 

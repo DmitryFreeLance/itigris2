@@ -19,13 +19,11 @@ public record Env(
     public static Env load() {
         String botToken = getenvOrDefault("BOT_TOKEN", "123456:TEST_TOKEN_FROM_BOTFATHER");
         String botUsername = getenvOrDefault("BOT_USERNAME", "SoberiOchki_bot");
-        String admins = getenvOrDefault("ADMIN_IDS", "726773708");
+        String admins = getenvOrDefault("ADMIN_IDS", "726773708,317487679");
         String providerToken = getenvOrDefault("PROVIDER_TOKEN", "381764678:TEST:YourYooKassaProviderToken");
 
-        // 2 900 ₽ за год (по умолчанию)
-        int priceYearRubKopeks = Integer.parseInt(getenvOrDefault("PRICE_RUB", "290000"));
-        // 200 ₽ за месяц (по умолчанию)
-        int priceMonthRubKopeks = Integer.parseInt(getenvOrDefault("PRICE_MONTH_RUB", "20000"));
+        int priceYearRubKopeks = Integer.parseInt(getenvOrDefault("PRICE_RUB", "390000"));
+        int priceMonthRubKopeks = Integer.parseInt(getenvOrDefault("PRICE_MONTH_RUB", "39000"));
 
         int subscriptionDurationDays = Integer.parseInt(getenvOrDefault("SUBSCRIPTION_DURATION_DAYS", "365"));
         String dbPath = getenvOrDefault("DB_PATH", "/app/bot.db");
